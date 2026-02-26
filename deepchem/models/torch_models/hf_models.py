@@ -182,7 +182,7 @@ class HuggingFaceModel(TorchModel):
         on huggingface.co or path to directory containing model weights saved using `save_pretrained`
         method of a HuggingFace model.
 
-        Parameter
+        Parameters
         ----------
         model_dir: str
             Directory containing model checkpoint
@@ -303,6 +303,10 @@ class HuggingFaceModel(TorchModel):
 
             inputs = {**tokens, 'labels': y}
             return inputs, y, w
+        else:
+            for key, value in tokens.items():
+                tokens[key] = value.to(self.device)
+            return tokens, None, w
 
     def fit_generator(self,
                       generator: Iterable[Tuple[Any, Any, Any]],
@@ -478,7 +482,7 @@ class HuggingFaceModel(TorchModel):
 
         Note
         ----
-        A HuggingFace model does not output uncertainity. The argument is here
+        A HuggingFace model does not output uncertainty. The argument is here
         since it is also present in TorchModel. Similarly, other variables like
         other_output_types are also not used. Instead, a HuggingFace model outputs
         loss, logits, hidden state and attentions.
@@ -515,7 +519,7 @@ class HuggingFaceModel(TorchModel):
             if isinstance(output_values, torch.Tensor):
                 output_values = [output_values]
             output_values = [t.detach().cpu().numpy() for t in output_values]
-            # Apply tranformers and record results.
+            # Apply transformers and record results.
             if uncertainty:
                 var = [output_values[i] for i in self._variance_outputs]
                 if variances is None:

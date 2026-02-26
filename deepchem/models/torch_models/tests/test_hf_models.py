@@ -327,6 +327,59 @@ def test_modify_model_keys(tmpdir):
 
 
 @pytest.mark.hf
+def test_prepare_batch_no_task(hf_tokenizer, smiles_regression_dataset):
+    """Test that _prepare_batch handles task=None without error."""
+    from transformers.models.roberta import RobertaConfig, RobertaModel
+
+    config = RobertaConfig(vocab_size=hf_tokenizer.vocab_size)
+    model = RobertaModel(config)
+    hf_model = HuggingFaceModel(model=model,
+                                tokenizer=hf_tokenizer,
+                                task=None,
+                                device=torch.device('cpu'))
+    hf_model._ensure_built()
+
+    generator = hf_model.default_generator(smiles_regression_dataset,
+                                           epochs=1,
+                                           mode='predict')
+    for batch in generator:
+        inputs, labels, weights = hf_model._prepare_batch(batch)
+        assert inputs is not None
+        assert 'input_ids' in inputs
+        assert 'attention_mask' in inputs
+        assert labels is None
+        break
+
+
+@pytest.mark.hf
+def test_fill_mask_single_string(tmpdir, hf_tokenizer):
+    """Test fill_mask with a single string input instead of a list."""
+    from transformers import RobertaConfig, RobertaForMaskedLM
+
+    config = RobertaConfig(vocab_size=hf_tokenizer.vocab_size)
+    model = RobertaForMaskedLM(config)
+    hf_model = HuggingFaceModel(model=model,
+                                tokenizer=hf_tokenizer,
+                                task='mlm',
+                                model_dir=tmpdir,
+                                device=torch.device('cpu'))
+    hf_model._ensure_built()
+
+    test_string = "CN(c1ccccc1)c1ccccc1C(=O)NCC1(O)CCOCC1"
+    tokenized_test_string = hf_tokenizer(test_string)
+    tokenized_test_string.input_ids[1] = hf_tokenizer.mask_token_id
+    masked_test_string = hf_tokenizer.decode(tokenized_test_string.input_ids)
+
+    # Pass a single string, not a list
+    results = hf_model.fill_mask(masked_test_string)
+
+    # Single string input should return a list of dicts (not list of lists)
+    assert isinstance(results, list)
+    assert isinstance(results[0], dict)
+    assert len(results) == 5  # default top_k=5
+
+
+@pytest.mark.hf
 def test_load_molformer_model_from_hf_checkpoint(tmpdir):
     """ Test loading a MoLFormer model from a Hugging Face-style checkpoint for different tasks.
     The following task configurations are tested: mlm, classification (single-label and multi-label),
